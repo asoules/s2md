@@ -1,0 +1,38 @@
+{
+  "name": "s2md",
+  "version": "1.0.0",
+  "description": "Convert Claude Code sessions to readable Markdown files",
+  "main": "dist/convert.js",
+  "bin": {
+    "s2md": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "hooks",
+    ".claude-plugin",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "session",
+    "markdown",
+    "export",
+    "hook",
+    "plugin"
+  ],
+  "author": "Aaron Soules",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/asoules/s2md"
+  },
+  "devDependencies": {
+    "@types/node": "^22.13.1",
+    "typescript": "^5.7.3"
+  }
+}

@@ -1,0 +1,11 @@
+{
+  "name": "s2md",
+  "version": "1.0.0",
+  "description": "Automatically convert Claude Code sessions to readable Markdown files",
+  "author": {
+    "name": "Aaron Soules"
+  },
+  "repository": "https://github.com/asoules/s2md",
+  "license": "MIT",
+  "keywords": ["claude", "claude-code", "session", "markdown", "export", "hook"]
+}

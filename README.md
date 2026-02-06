@@ -4,21 +4,13 @@ Convert coding agent sessions to readable Markdown files.
 
 Supports **Claude Code** and **pi** session formats.
 
-- **Automatic** — Installs as a Claude Code plugin that converts every session on exit
+- **Automatic** — Converts every session on exit via hooks/extensions
 - **Backfill** — One command to convert all your historical sessions from both agents
 - **Clean output** — Just the conversation by default; opt-in for tool calls and thinking blocks
 
 ## Install
 
-### As a Claude Code plugin (recommended)
-
-```bash
-claude plugin install s2md
-```
-
-This auto-registers a `SessionEnd` hook that converts each session to Markdown when it ends.
-
-### Via npm (for backfill CLI)
+### 1. Install the CLI
 
 ```bash
 npm install -g s2md
@@ -28,6 +20,58 @@ Or use without installing:
 
 ```bash
 npx s2md backfill
+```
+
+### 2. Set up automatic conversion
+
+#### Claude Code
+
+Add a `SessionEnd` hook to `~/.claude/settings.json`:
+
+```json
+{
+  "hooks": {
+    "SessionEnd": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "s2md hook",
+            "async": true,
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+#### pi
+
+Create `~/.pi/agent/extensions/s2md.ts`:
+
+```typescript
+import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
+import { execSync } from "child_process";
+
+export default function (pi: ExtensionAPI) {
+  pi.on("session_shutdown", async (_event, ctx) => {
+    const sessionFile = ctx.sessionManager.getSessionFile();
+    if (!sessionFile) return;
+
+    try {
+      execSync("s2md hook", {
+        input: JSON.stringify({ transcript_path: sessionFile }),
+        timeout: 30000,
+        stdio: ["pipe", "pipe", "pipe"],
+      });
+    } catch {
+      // Don't block shutdown on conversion errors
+    }
+  });
+}
 ```
 
 ## Usage

@@ -8,6 +8,10 @@ Supports **Claude Code** and **pi** session formats.
 - **Backfill** — One command to convert all your historical sessions from both agents
 - **Clean output** — Just the conversation by default; opt-in for tool calls and thinking blocks
 
+## Why
+
+Coding agent sessions contain valuable context — decisions, debugging steps, architectural discussions — but they're locked in opaque JSONL files. s2md converts them to Markdown so they can be indexed by tools like [qmd](https://github.com/tobi/qmd), an on-device search engine for Markdown documents. This lets you search across your entire coding history with keywords or natural language.
+
 ## Install
 
 ### 1. Install the CLI

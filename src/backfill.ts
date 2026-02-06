@@ -2,6 +2,9 @@ import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
 import { convertAndWrite, ConvertOptions } from "./convert";
+import { convertPiAndWrite } from "./convert-pi";
+import { detectFormat } from "./detect";
+import { resolveProjectRoot, outputPath } from "./resolve";
 
 interface BackfillArgs {
   project?: string;
@@ -17,8 +20,6 @@ function parseArgs(argv: string[]): BackfillArgs {
     includeThinking: false,
   };
 
-  // Skip "node", "cli.js", "backfill" when called via CLI
-  // or "node", "backfill.js" when called directly
   const startIdx = argv.findIndex((a) => a === "backfill");
   const i0 = startIdx >= 0 ? startIdx + 1 : 2;
 
@@ -38,7 +39,7 @@ function parseArgs(argv: string[]): BackfillArgs {
   return args;
 }
 
-function findJsonlFiles(
+function findClaudeJsonlFiles(
   projectsDir: string,
   projectFilter?: string
 ): string[] {
@@ -47,10 +48,7 @@ function findJsonlFiles(
   let dirs: string[];
   if (projectFilter) {
     const resolved = path.resolve(projectFilter);
-    if (!fs.existsSync(resolved)) {
-      console.error(`Project directory not found: ${resolved}`);
-      process.exit(1);
-    }
+    if (!fs.existsSync(resolved)) return [];
     dirs = [resolved];
   } else {
     try {
@@ -59,8 +57,7 @@ function findJsonlFiles(
         .map((d) => path.join(projectsDir, d))
         .filter((d) => fs.statSync(d).isDirectory());
     } catch {
-      console.error(`Cannot read projects directory: ${projectsDir}`);
-      process.exit(1);
+      return [];
     }
   }
 
@@ -76,15 +73,45 @@ function findJsonlFiles(
   return files;
 }
 
-function sessionIdFromPath(jsonlPath: string): string {
-  return path.basename(jsonlPath, ".jsonl");
+function findPiJsonlFiles(
+  sessionsDir: string,
+  projectFilter?: string
+): string[] {
+  const files: string[] = [];
+
+  if (!fs.existsSync(sessionsDir)) return [];
+
+  let dirs: string[];
+  if (projectFilter) {
+    const resolved = path.resolve(projectFilter);
+    if (!fs.existsSync(resolved)) return [];
+    dirs = [resolved];
+  } else {
+    try {
+      dirs = fs
+        .readdirSync(sessionsDir)
+        .map((d) => path.join(sessionsDir, d))
+        .filter((d) => fs.statSync(d).isDirectory());
+    } catch {
+      return [];
+    }
+  }
+
+  for (const dir of dirs) {
+    const entries = fs.readdirSync(dir);
+    for (const entry of entries) {
+      if (!entry.endsWith(".jsonl")) continue;
+      files.push(path.join(dir, entry));
+    }
+  }
+
+  return files;
 }
 
 /**
  * Check if output already exists for a JSONL file without doing a full conversion.
  */
 async function checkOutputExists(jsonlPath: string): Promise<boolean> {
-  const { resolveProjectRoot, outputPath } = await import("./resolve");
   const readline = await import("readline");
 
   const input = fs.createReadStream(jsonlPath, { encoding: "utf-8" });
@@ -98,6 +125,15 @@ async function checkOutputExists(jsonlPath: string): Promise<boolean> {
     if (!trimmed) continue;
     try {
       const obj = JSON.parse(trimmed);
+
+      // Pi format: session header has id and cwd
+      if (obj.type === "session" && obj.id && obj.cwd) {
+        sessionId = obj.id;
+        cwd = obj.cwd;
+        break;
+      }
+
+      // Claude format: sessionId and cwd on entries
       if (!sessionId && obj.sessionId) sessionId = obj.sessionId;
       if (!cwd && obj.cwd) cwd = obj.cwd;
       if (sessionId && cwd) break;
@@ -118,10 +154,17 @@ async function checkOutputExists(jsonlPath: string): Promise<boolean> {
 
 export async function main() {
   const args = parseArgs(process.argv);
-  const projectsDir = path.join(os.homedir(), ".claude", "projects");
 
-  const jsonlFiles = findJsonlFiles(projectsDir, args.project);
-  console.log(`Found ${jsonlFiles.length} session file(s)`);
+  const claudeProjectsDir = path.join(os.homedir(), ".claude", "projects");
+  const piSessionsDir = path.join(os.homedir(), ".pi", "agent", "sessions");
+
+  const claudeFiles = findClaudeJsonlFiles(claudeProjectsDir, args.project);
+  const piFiles = findPiJsonlFiles(piSessionsDir, args.project);
+
+  const allFiles = [...claudeFiles, ...piFiles];
+  console.log(
+    `Found ${allFiles.length} session file(s) (${claudeFiles.length} Claude, ${piFiles.length} pi)`
+  );
 
   const opts: ConvertOptions = {
     includeTools: args.includeTools,
@@ -132,8 +175,8 @@ export async function main() {
   let skipped = 0;
   let errors = 0;
 
-  for (const jsonlFile of jsonlFiles) {
-    const sessionId = sessionIdFromPath(jsonlFile);
+  for (const jsonlFile of allFiles) {
+    const sessionId = path.basename(jsonlFile, ".jsonl");
 
     try {
       if (!args.force) {
@@ -144,13 +187,24 @@ export async function main() {
         }
       }
 
-      const outPath = await convertAndWrite(jsonlFile, opts);
+      const format = await detectFormat(jsonlFile);
+
+      let outPath: string | null = null;
+      if (format === "claude") {
+        outPath = await convertAndWrite(jsonlFile, opts);
+      } else if (format === "pi") {
+        outPath = await convertPiAndWrite(jsonlFile, opts);
+      } else {
+        skipped++;
+        continue;
+      }
+
       if (!outPath) {
         skipped++;
         continue;
       }
       converted++;
-      console.log(`  ✓ ${sessionId} → ${outPath}`);
+      console.log(`  ✓ [${format}] ${sessionId} → ${outPath}`);
     } catch (err) {
       errors++;
       console.error(

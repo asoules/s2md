@@ -3,7 +3,9 @@
 const command = process.argv[2];
 
 function printUsage() {
-  console.log(`s2md — Convert Claude Code sessions to Markdown
+  console.log(`s2md — Convert coding agent sessions to Markdown
+
+Supports Claude Code and pi session formats.
 
 Usage:
   s2md backfill [options]     Batch-convert historical sessions
@@ -15,6 +17,10 @@ Backfill options:
   --force                     Overwrite existing .md files
   --include-tools             Include tool calls in output
   --include-thinking          Include thinking blocks in output
+
+Sources:
+  Claude Code:  ~/.claude/projects/
+  pi:           ~/.pi/agent/sessions/
 
 Output:
   Files are written to ~/.s2md/projects/{project-slug}/{session-id}.md

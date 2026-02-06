@@ -1,8 +1,11 @@
 import { convertAndWrite } from "./convert";
+import { convertPiAndWrite } from "./convert-pi";
+import { detectFormat } from "./detect";
 
 /**
  * SessionEnd hook entry point.
  * Reads hook JSON from stdin, extracts transcript_path, converts to markdown.
+ * Auto-detects Claude Code vs pi session format.
  */
 export async function main() {
   // Read all of stdin
@@ -32,7 +35,18 @@ export async function main() {
   }
 
   try {
-    const outPath = await convertAndWrite(transcriptPath);
+    const format = await detectFormat(transcriptPath);
+    let outPath: string | null = null;
+
+    if (format === "claude") {
+      outPath = await convertAndWrite(transcriptPath);
+    } else if (format === "pi") {
+      outPath = await convertPiAndWrite(transcriptPath);
+    } else {
+      process.stderr.write("s2md hook: unknown session format\n");
+      process.exit(0);
+    }
+
     if (outPath) {
       process.stderr.write(`s2md: wrote ${outPath}\n`);
     }
